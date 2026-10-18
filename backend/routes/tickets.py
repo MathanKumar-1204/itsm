@@ -168,3 +168,18 @@ def sync_servicenow(ticket_id: str):
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 400
+
+
+@tickets_bp.route("/api/tickets/sync-all", methods=["POST", "GET"])
+@require_auth
+def sync_all_tickets():
+    """Forces synchronization of all tickets with ServiceNow."""
+    try:
+        tickets = TicketService.sync_all_tickets(user=g.current_user)
+        return jsonify({
+            "success": True,
+            "tickets": tickets,
+            "count": len(tickets),
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500

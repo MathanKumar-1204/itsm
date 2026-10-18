@@ -62,15 +62,20 @@ const PriorityBadge = ({ priority }) => {
   );
 };
 
-// Status badge helper
-const StatusBadge = ({ status }) => {
-  const s = (status || 'open').toLowerCase();
+// State & Status badge helper
+const StatusBadge = ({ state, status }) => {
+  const display = state || (status ? status.replace(/_/g, ' ') : 'New');
+  const s = display.toLowerCase().replace(/[\s-]+/g, '_');
   const styles = {
-    new: 'bg-blue-50 text-blue-700 border-blue-200',
+    new: 'bg-indigo-50 text-indigo-700 border-indigo-200',
     open: 'bg-sky-50 text-sky-700 border-sky-200',
-    in_progress: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    in_progress: 'bg-blue-50 text-blue-700 border-blue-200',
+    work_in_progress: 'bg-blue-50 text-blue-700 border-blue-200',
+    on_hold: 'bg-amber-50 text-amber-700 border-amber-200',
+    pending: 'bg-amber-50 text-amber-700 border-amber-200',
     resolved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     closed: 'bg-slate-100 text-slate-700 border-slate-200',
+    canceled: 'bg-rose-50 text-rose-700 border-rose-200',
     published: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     indexed: 'bg-teal-50 text-teal-700 border-teal-200',
     submitted: 'bg-blue-50 text-blue-700 border-blue-200',
@@ -80,8 +85,8 @@ const StatusBadge = ({ status }) => {
     pending_approval: 'bg-amber-50 text-amber-700 border-amber-200',
   };
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${styles[s] || styles.new}`}>
-      {s.replace('_', ' ').toUpperCase()}
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${styles[s] || styles.new}`}>
+      {display.toUpperCase()}
     </span>
   );
 };
@@ -1023,7 +1028,7 @@ export default function App() {
                         </div>
                         <div className="flex items-center space-x-2">
                           <PriorityBadge priority={ticket.priority} />
-                          <StatusBadge status={ticket.status} />
+                          <StatusBadge state={ticket.state} status={ticket.status} />
                         </div>
                       </div>
                     ))}
@@ -1273,13 +1278,24 @@ export default function App() {
                   </h3>
                   <p className="text-xs text-slate-500">Live MongoDB Atlas records synchronized with ServiceNow</p>
                 </div>
-                <button
-                  onClick={() => setActiveTab('intake')}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3 py-2 rounded-lg flex items-center space-x-1.5 shadow"
-                >
-                  <Icon name="plus" className="w-3.5 h-3.5" />
-                  <span>New Ticket</span>
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={fetchTickets}
+                    disabled={ticketsLoading}
+                    className="bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold px-3 py-2 rounded-lg flex items-center space-x-1.5 border border-slate-200 shadow-2xs transition"
+                    title="Refresh and sync live state from ServiceNow"
+                  >
+                    <Icon name="refresh" className={`w-3.5 h-3.5 text-indigo-600 ${ticketsLoading ? 'animate-spin' : ''}`} />
+                    <span>Sync ServiceNow</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('intake')}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3 py-2 rounded-lg flex items-center space-x-1.5 shadow"
+                  >
+                    <Icon name="plus" className="w-3.5 h-3.5" />
+                    <span>New Ticket</span>
+                  </button>
+                </div>
               </div>
 
               {/* Ticket List Table */}
@@ -1291,7 +1307,7 @@ export default function App() {
                       <th className="py-3 px-4 font-semibold">Subject</th>
                       <th className="py-3 px-4 font-semibold">Category</th>
                       <th className="py-3 px-4 font-semibold">Priority</th>
-                      <th className="py-3 px-4 font-semibold">Status</th>
+                      <th className="py-3 px-4 font-semibold">State</th>
                       <th className="py-3 px-4 font-semibold">ServiceNow Ref</th>
                       <th className="py-3 px-4 font-semibold">Requester</th>
                       <th className="py-3 px-4 font-semibold text-right">Action</th>
@@ -1326,7 +1342,7 @@ export default function App() {
                           <td className="py-3.5 px-4 font-semibold text-slate-900 max-w-xs truncate">{ticket.title}</td>
                           <td className="py-3.5 px-4 text-xs text-slate-600">{ticket.category}</td>
                           <td className="py-3.5 px-4"><PriorityBadge priority={ticket.priority} /></td>
-                          <td className="py-3.5 px-4"><StatusBadge status={ticket.status} /></td>
+                          <td className="py-3.5 px-4"><StatusBadge state={ticket.state} status={ticket.status} /></td>
                           <td className="py-3.5 px-4 font-mono text-xs">
                             {ticket.external_record_id ? (
                               <a
@@ -2001,7 +2017,7 @@ export default function App() {
                 <div className="flex items-center space-x-2">
                   <span className="font-mono font-bold text-sm text-indigo-600">{selectedTicket.ticket_number}</span>
                   <PriorityBadge priority={selectedTicket.priority} />
-                  <StatusBadge status={selectedTicket.status} />
+                  <StatusBadge state={selectedTicket.state} status={selectedTicket.status} />
                 </div>
                 <h3 className="text-base font-bold text-slate-900 mt-1">{selectedTicket.title}</h3>
               </div>
@@ -2015,7 +2031,7 @@ export default function App() {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 text-xs">
+            <div className="grid grid-cols-3 gap-4 text-xs">
               <div>
                 <span className="text-slate-400 font-semibold block">Requester</span>
                 <span className="font-semibold text-slate-800">{selectedTicket.requester_name || selectedTicket.requester_email || 'Employee'}</span>
@@ -2023,6 +2039,15 @@ export default function App() {
               <div>
                 <span className="text-slate-400 font-semibold block">Category</span>
                 <span className="font-semibold text-slate-800">{selectedTicket.category}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 font-semibold block">ServiceNow State</span>
+                <span className="font-semibold text-slate-800 flex items-center space-x-1">
+                  <span>{selectedTicket.state || (selectedTicket.status ? selectedTicket.status.replace(/_/g, ' ').toUpperCase() : 'New')}</span>
+                  {selectedTicket.external_record_id && (
+                    <span className="font-mono text-indigo-600">({selectedTicket.external_record_id})</span>
+                  )}
+                </span>
               </div>
             </div>
 
@@ -2065,7 +2090,21 @@ export default function App() {
             </div>
 
             {/* Resolution */}
-            {role !== 'employee' && selectedTicket.status !== 'resolved' && (
+            {selectedTicket.status === 'resolved' ? (
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-emerald-700 bg-emerald-50 p-2.5 rounded-lg border border-emerald-200">
+                <span className="font-semibold">✓ Incident marked Resolved in ServiceNow</span>
+                {selectedTicket.external_record_url && (
+                  <a
+                    href={selectedTicket.external_record_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-bold underline hover:text-emerald-900"
+                  >
+                    View in ServiceNow ↗
+                  </a>
+                )}
+              </div>
+            ) : role !== 'employee' && (
               <div className="pt-2 border-t border-slate-100 flex justify-end">
                 <button
                   onClick={handleResolveTicket}

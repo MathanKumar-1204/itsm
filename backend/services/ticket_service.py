@@ -79,7 +79,41 @@ class TicketService:
         if user_role == "employee":
             filters["requester_id"] = user_id
 
-        return db.list_tickets(**filters)
+        tickets = db.list_tickets(**filters)
+
+        # Sync states live from ServiceNow for all tickets with external_record_id
+        ext_ids = [t.get("external_record_id") for t in tickets if t.get("external_record_id")]
+        if ext_ids and not servicenow_client.is_demo_mode():
+            try:
+                sn_states = servicenow_client.batch_sync_incident_states(ext_ids)
+                for t in tickets:
+                    ext_id = t.get("external_record_id")
+                    if ext_id and ext_id in sn_states:
+                        sn_info = sn_states[ext_id]
+                        new_state = sn_info["state_display"]
+                        new_status = sn_info["mapped_status"]
+                        # If state or status changed, persist update to database
+                        if t.get("state") != new_state or t.get("status") != new_status:
+                            t["state"] = new_state
+                            t["status"] = new_status
+                            db.update_ticket(t["id"], {
+                                "state": new_state,
+                                "status": new_status,
+                                "last_synced_at": datetime.now(timezone.utc).isoformat()
+                            })
+                        else:
+                            t["state"] = new_state
+                    else:
+                        t["state"] = t.get("state") or (t.get("status", "New").replace("_", " ").title())
+            except Exception as e:
+                logger.warning(f"Error syncing ServiceNow states in list_tickets: {e}")
+                for t in tickets:
+                    t["state"] = t.get("state") or (t.get("status", "New").replace("_", " ").title())
+        else:
+            for t in tickets:
+                t["state"] = t.get("state") or (t.get("status", "New").replace("_", " ").title())
+
+        return tickets
 
     @classmethod
     def get_ticket(cls, ticket_id: str, user: Dict[str, Any]) -> Dict[str, Any]:
@@ -207,8 +241,19 @@ class TicketService:
 
         sync_res = servicenow_client.sync_incident_status(ext_id)
         if sync_res.get("success") and "mapped_internal_status" in sync_res:
+            state_val = str(sync_res.get("external_state", ""))
+            state_names = {"1": "New", "2": "In Progress", "3": "On Hold", "6": "Resolved", "7": "Closed", "8": "Canceled"}
+            state_display = state_names.get(state_val, sync_res["mapped_internal_status"].replace("_", " ").title())
             db.update_ticket(ticket_id, {
                 "status": sync_res["mapped_internal_status"],
+                "state": state_display,
                 "last_synced_at": datetime.now(timezone.utc).isoformat(),
             })
+            ticket["status"] = sync_res["mapped_internal_status"]
+            ticket["state"] = state_display
         return sync_res
+
+    @classmethod
+    def sync_all_tickets(cls, user: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Syncs all tickets against ServiceNow and returns updated list."""
+        return cls.list_tickets(user=user)

@@ -1,6 +1,6 @@
 import logging
 import requests
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -203,6 +203,67 @@ class ServiceNowClient:
             return {"success": False, "error": f"Record {external_record_id} not found in ServiceNow"}
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    def batch_sync_incident_states(self, external_ids: Optional[List[str]] = None) -> Dict[str, Dict[str, Any]]:
+        """
+        Batch queries ServiceNow for incident states and returns a mapping:
+        {
+            "INC0010009": {
+                "state_code": "6",
+                "state_display": "Resolved",
+                "mapped_status": "resolved",
+                "sys_id": "...",
+            }
+        }
+        """
+        if self.is_demo_mode():
+            return {}
+
+        state_map = {
+            "1": ("New", "new"),
+            "2": ("In Progress", "in_progress"),
+            "3": ("On Hold", "pending"),
+            "6": ("Resolved", "resolved"),
+            "7": ("Closed", "closed"),
+            "8": ("Canceled", "closed"),
+        }
+
+        query = "ORDERBYDESCsys_updated_on"
+        if external_ids:
+            clean_ids = [str(x).strip() for x in external_ids if x]
+            if clean_ids:
+                query = f"numberIN{','.join(clean_ids)}"
+
+        url = f"{self.instance_url}/api/now/table/incident?sysparm_fields=number,state,sys_id,sys_updated_on&sysparm_query={query}&sysparm_display_value=all&sysparm_limit=100"
+        try:
+            resp = requests.get(
+                url,
+                auth=(self.username, self.password),
+                headers={"Accept": "application/json"},
+                timeout=8,
+            )
+            if resp.status_code == 200:
+                results = resp.json().get("result", [])
+                out = {}
+                for inc in results:
+                    num = inc.get("number", {}).get("value") if isinstance(inc.get("number"), dict) else inc.get("number")
+                    st_val = str(inc.get("state", {}).get("value") if isinstance(inc.get("state"), dict) else inc.get("state"))
+                    st_disp = inc.get("state", {}).get("display_value") if isinstance(inc.get("state"), dict) else None
+
+                    default_disp, mapped_status = state_map.get(st_val, ("New", "new"))
+                    display_name = st_disp or default_disp
+
+                    if num:
+                        out[num] = {
+                            "state_code": st_val,
+                            "state_display": display_name,
+                            "mapped_status": mapped_status,
+                            "sys_id": inc.get("sys_id", {}).get("value") if isinstance(inc.get("sys_id"), dict) else inc.get("sys_id"),
+                        }
+                return out
+        except Exception as e:
+            logger.warning(f"Batch ServiceNow sync error: {e}")
+        return {}
 
 
 servicenow_client = ServiceNowClient()
