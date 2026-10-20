@@ -21,11 +21,6 @@ class Config:
     PORT = int(os.getenv("PORT", 5000))
     FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
 
-    # Supabase configuration
-    SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
-    SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
-    SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
-
     # Groq API configuration (GPT-OSS models with multi-key failover pool)
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
     GROQ_API_KEY_FALLBACK_1 = os.getenv("GROQ_API_KEY_FALLBACK_1", "").strip()
@@ -53,7 +48,11 @@ class Config:
     PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "itsm-knowledge").strip()
     PINECONE_NAMESPACE = os.getenv("PINECONE_NAMESPACE", "itsm-public").strip()
 
-    # Embedding Model (384-dimensional)
+    # Hugging Face Serverless Inference API (Zero-PyTorch 384-dimensional Embeddings)
+    HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY", os.getenv("HF_TOKEN", "")).strip()
+    HUGGINGFACE_API_KEY_FALLBACK_1 = os.getenv("HUGGINGFACE_API_KEY_FALLBACK_1", "").strip()
+
+    # Embedding Model (384-dimensional, Hugging Face Hub Model ID)
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2").strip()
 
     # ServiceNow REST API Configuration
@@ -78,15 +77,17 @@ class Config:
     def get_status(cls):
         """Returns non-sensitive status of configured integrations."""
         return {
+            "database": "MongoDB Cloud Atlas",
             "mongodb_configured": bool(cls.MONGO_URI),
             "mongodb_db": cls.MONGO_DB_NAME,
-            "supabase_configured": bool(cls.SUPABASE_URL and (cls.SUPABASE_SERVICE_ROLE_KEY or cls.SUPABASE_ANON_KEY)),
             "groq_configured": len(cls.get_groq_api_keys()) > 0,
             "groq_keys_count": len(cls.get_groq_api_keys()),
             "groq_model": cls.GROQ_MODEL,
             "groq_fallback_model": cls.GROQ_FALLBACK_MODEL,
             "pinecone_configured": bool(cls.PINECONE_API_KEY),
             "pinecone_index": cls.PINECONE_INDEX_NAME,
+            "huggingface_configured": bool(cls.HUGGINGFACE_API_KEY),
+            "embedding_provider": "Hugging Face Inference API" if cls.HUGGINGFACE_API_KEY else "Deterministic Fallback Vector (384-dim)",
             "embedding_model": cls.EMBEDDING_MODEL,
             "servicenow_configured": bool(cls.SERVICENOW_INSTANCE_URL and cls.SERVICENOW_USERNAME and cls.SERVICENOW_PASSWORD),
             "servicenow_instance": cls.SERVICENOW_INSTANCE_URL or None,

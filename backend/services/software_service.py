@@ -58,13 +58,17 @@ class SoftwareService:
             designation=designation
         )
 
-        is_auto_approved = evaluation.get("recommendation") == "auto_approved" or evaluation.get("status") == "approved"
+        is_catalog_preapproved = not software.get("approval_required", True)
+        is_auto_approved = is_catalog_preapproved or evaluation.get("recommendation") == "auto_approved" or evaluation.get("status") == "approved"
         initial_status = "approved" if is_auto_approved else "pending_approval"
         prov_status = "provisioning" if is_auto_approved else "pending"
 
         approved_by = (
-            f"AI_AUTO_APPROVAL ({evaluation.get('designation_assessed')})"
-            if is_auto_approved else None
+            "PRE_APPROVED_CATALOG"
+            if is_catalog_preapproved
+            else f"AI_AUTO_APPROVAL ({evaluation.get('designation_assessed')})"
+            if is_auto_approved
+            else None
         )
         approval_comment = evaluation.get("ai_rationale")
 

@@ -1,52 +1,18 @@
 import os
 import logging
 import math
+import requests
 from typing import List, Dict, Any, Optional
 from config import Config
 from ai.groq_client import groq_client
 
 logger = logging.getLogger(__name__)
 
-_embedding_model = None
-
-
-def get_embedding_model():
-    """Lazily loads the sentence-transformers model (384 dimensions)."""
-    global _embedding_model
-    if _embedding_model is not None:
-        return _embedding_model
-
-    if os.getenv("SKIP_MODEL_DOWNLOAD", "").lower() in ("true", "1", "yes"):
-        return None
-
-    try:
-        from sentence_transformers import SentenceTransformer
-        logger.info(f"Loading embedding model: {Config.EMBEDDING_MODEL}")
-        _embedding_model = SentenceTransformer(Config.EMBEDDING_MODEL)
-        return _embedding_model
-    except Exception as e:
-        logger.warning(f"Could not load SentenceTransformer ({e}). Using normalized character n-gram embedding fallback.")
-        return None
-
-
-def generate_embedding(text: str) -> List[float]:
-    """Generates a 384-dimensional vector embedding for text."""
-    model = get_embedding_model()
-    if model is not None:
-        try:
-            vec = model.encode(text, convert_to_numpy=True).tolist()
-            return vec
-        except Exception as e:
-            logger.error(f"Embedding generation error: {e}")
-
-    # Deterministic 384-dimensional fallback vector based on hashing for zero-dependency testability
-    return _generate_fallback_vector(text, dim=384)
-
 
 def _generate_fallback_vector(text: str, dim: int = 384) -> List[float]:
     """Fallback generator creating deterministic unit-normalized 384-dim pseudo-embeddings."""
     vec = [0.0] * dim
-    clean = text.lower()
+    clean = (text or "").lower()
     for i, ch in enumerate(clean):
         idx = (ord(ch) * 31 + i) % dim
         vec[idx] += 1.0
@@ -54,6 +20,100 @@ def _generate_fallback_vector(text: str, dim: int = 384) -> List[float]:
     if norm > 0:
         vec = [v / norm for v in vec]
     return vec
+
+
+def _call_huggingface_embeddings(texts: List[str], token: str) -> Optional[List[List[float]]]:
+    """
+    Calls Hugging Face Serverless Inference API for feature extraction.
+    Returns list of 384-dimensional float lists if successful, else None.
+    """
+    if not token or not texts:
+        return None
+
+    endpoints = [
+        f"https://router.huggingface.co/hf-inference/models/{Config.EMBEDDING_MODEL}/pipeline/feature-extraction",
+        f"https://router.huggingface.co/hf-inference/models/{Config.EMBEDDING_MODEL}",
+    ]
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    payload = {"inputs": texts, "options": {"wait_for_model": True}}
+
+    for url in endpoints:
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=12)
+            if resp.status_code == 200:
+                data = resp.json()
+                if isinstance(data, list) and len(data) == len(texts):
+                    parsed_batch = []
+                    valid = True
+                    for item in data:
+                        if isinstance(item, list) and len(item) > 0:
+                            if isinstance(item[0], list):
+                                item = item[0]
+                            parsed_batch.append([float(x) for x in item])
+                        else:
+                            valid = False
+                            break
+                    if valid:
+                        return parsed_batch
+            elif resp.status_code == 404:
+                continue
+            else:
+                logger.warning(
+                    f"Hugging Face Inference returned HTTP {resp.status_code} from {url}: {resp.text[:150]}"
+                )
+        except Exception as e:
+            logger.warning(f"Hugging Face Inference request error to {url}: {e}")
+
+    return None
+
+
+def generate_embeddings_batch(texts: List[str]) -> List[List[float]]:
+    """
+    Generates 384-dimensional vector embeddings for a list of strings via Hugging Face Inference API.
+    Zero-PyTorch footprint enables seamless deployment on Vercel serverless.
+    Falls back gracefully to deterministic unit-normalized vectors if offline or unauthenticated.
+    """
+    if not texts:
+        return []
+
+    tokens = []
+    if Config.HUGGINGFACE_API_KEY:
+        tokens.append(Config.HUGGINGFACE_API_KEY)
+    if Config.HUGGINGFACE_API_KEY_FALLBACK_1 and Config.HUGGINGFACE_API_KEY_FALLBACK_1 not in tokens:
+        tokens.append(Config.HUGGINGFACE_API_KEY_FALLBACK_1)
+
+    batch_size = 16
+    results: List[List[float]] = []
+
+    for i in range(0, len(texts), batch_size):
+        sub_batch = texts[i : i + batch_size]
+        sub_results = None
+
+        for token in tokens:
+            sub_results = _call_huggingface_embeddings(sub_batch, token)
+            if sub_results is not None:
+                break
+
+        if sub_results is not None and len(sub_results) == len(sub_batch):
+            results.extend(sub_results)
+        else:
+            results.extend([_generate_fallback_vector(t, dim=384) for t in sub_batch])
+
+    return results
+
+
+def generate_embedding(text: str) -> List[float]:
+    """Generates a single 384-dimensional vector embedding for text."""
+    if not text:
+        return _generate_fallback_vector("", dim=384)
+    res = generate_embeddings_batch([text])
+    if res and len(res) > 0:
+        return res[0]
+    return _generate_fallback_vector(text, dim=384)
 
 
 def cosine_similarity(v1: List[float], v2: List[float]) -> float:
@@ -110,11 +170,14 @@ class RAGPipeline:
         pinecone_index = self._get_pinecone_index()
         vectors_to_upsert = []
 
-        for chunk in chunks:
+        # Batch-generate embeddings via Hugging Face Inference API
+        chunk_texts = [chunk["text"] for chunk in chunks]
+        chunk_embeddings = generate_embeddings_batch(chunk_texts)
+
+        for chunk, embedding in zip(chunks, chunk_embeddings):
             chunk_idx = chunk["chunk_index"]
             vector_id = f"doc_{doc_id}_chunk_{chunk_idx}"
             text = chunk["text"]
-            embedding = generate_embedding(text)
 
             metadata = {
                 "document_id": doc_id,
@@ -135,14 +198,14 @@ class RAGPipeline:
                     "values": embedding,
                     "metadata": metadata,
                 })
-            else:
-                # Store in memory vector index
-                self._memory_vectors = [v for v in self._memory_vectors if v["id"] != vector_id]
-                self._memory_vectors.append({
-                    "id": vector_id,
-                    "values": embedding,
-                    "metadata": metadata,
-                })
+            
+            # Keep in memory vector index as resilient cache/fallback
+            self._memory_vectors = [v for v in self._memory_vectors if v["id"] != vector_id]
+            self._memory_vectors.append({
+                "id": vector_id,
+                "values": embedding,
+                "metadata": metadata,
+            })
 
         if pinecone_index and vectors_to_upsert:
             try:
@@ -174,7 +237,7 @@ class RAGPipeline:
         query: str,
         top_k: int = 4,
         category: Optional[str] = None,
-        min_score: float = 0.25,
+        min_score: float = 0.15,
     ) -> List[Dict[str, Any]]:
         """
         Retrieves top_k most relevant chunks using query embedding.
@@ -214,7 +277,8 @@ class RAGPipeline:
                             "excerpt": meta.get("text", ""),
                             "score": round(score, 3),
                         })
-                return results
+                if results:
+                    return results
             except Exception as e:
                 logger.warning(f"Pinecone search error ({e}), checking memory vector store fallback.")
 

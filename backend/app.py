@@ -1,7 +1,7 @@
 import os
 import sys
 import logging
-from flask import Flask, jsonify
+from flask import Flask, jsonify, render_template, send_from_directory
 from flask_cors import CORS
 from config import Config
 from utils.error_handlers import register_error_handlers
@@ -16,13 +16,20 @@ logger = logging.getLogger("itsm_helpdesk")
 
 
 def create_app():
-    app = Flask(__name__)
+    backend_dir = os.path.dirname(os.path.abspath(__file__))
+    templates_dir = os.path.join(backend_dir, "templates")
+
+    app = Flask(
+        __name__,
+        template_folder=templates_dir if os.path.isdir(templates_dir) else backend_dir,
+        static_folder=backend_dir,
+    )
     app.config.from_object(Config)
 
-    # Enable CORS for configured frontend origin and localhost
+    # Enable CORS for configured frontend origin and all callers
     CORS(
         app,
-        resources={r"/api/*": {"origins": "*"}},
+        resources={r"/*": {"origins": "*"}},
         allow_headers="*",
     )
 
@@ -48,12 +55,31 @@ def create_app():
     # Register error handlers
     register_error_handlers(app)
 
+    @app.route("/", methods=["GET"])
+    @app.route("/index.html", methods=["GET"])
+    def home_page():
+        """Serves the interactive landing dashboard for Vercel and web browsers."""
+        try:
+            return render_template("index.html")
+        except Exception:
+            index_path = os.path.join(backend_dir, "index.html")
+            if os.path.exists(index_path):
+                return send_from_directory(backend_dir, "index.html")
+            return jsonify({
+                "status": "healthy",
+                "service": "ITSM AI Helpdesk Platform API",
+                "version": "1.0.0",
+                "database": "MongoDB Cloud Atlas",
+                "integrations": Config.get_status(),
+            })
+
     @app.route("/api/health", methods=["GET"])
     def health_check():
         return jsonify({
             "status": "healthy",
             "service": "ITSM AI Helpdesk Platform API",
             "version": "1.0.0",
+            "database": "MongoDB Cloud Atlas",
             "integrations": Config.get_status(),
         })
 
@@ -67,9 +93,10 @@ if __name__ == "__main__":
     logger.info("=" * 60)
     logger.info("ITSM AI-Powered Helpdesk Automation Platform API starting...")
     logger.info(f"Port: {Config.PORT} | Environment: {Config.FLASK_ENV}")
-    logger.info(f"MongoDB configured: {status.get('mongodb_configured')} (DB: {status.get('mongodb_db')})")
-    logger.info(f"Groq API configured: {status['groq_configured']} (Model: {status['groq_model']})")
-    logger.info(f"Pinecone configured: {status['pinecone_configured']} (Index: {status['pinecone_index']})")
+    logger.info(f"Primary Database: MongoDB Cloud Atlas ({status.get('mongodb_db')})")
+    logger.info("Supabase: Disabled (100% MongoDB for all platform features)")
+    logger.info(f"Groq API: {status['groq_configured']} (Keys count: {status.get('groq_keys_count')})")
+    logger.info(f"Pinecone: {status['pinecone_configured']} (Index: {status['pinecone_index']})")
     logger.info(f"ServiceNow Demo Mode: {status['servicenow_demo_mode']}")
     logger.info("=" * 60)
 

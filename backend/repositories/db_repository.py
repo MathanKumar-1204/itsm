@@ -5,7 +5,6 @@ from typing import Dict, Any, List, Optional
 from werkzeug.security import generate_password_hash, check_password_hash
 from config import Config
 from repositories.mongo_client import get_mongo_db, sanitize_doc
-from repositories.supabase_client import get_supabase_admin_client
 
 logger = logging.getLogger(__name__)
 
@@ -299,16 +298,6 @@ class DBRepository:
                 return sanitize_doc(record)
             except Exception as e:
                 logger.error(f"MongoDB create_ticket error: {e}")
-
-        # Supabase fallback if configured
-        admin_client = get_supabase_admin_client()
-        if admin_client:
-            try:
-                res = admin_client.table("tickets").insert(record).execute()
-                if res.data and len(res.data) > 0:
-                    return res.data[0]
-            except Exception:
-                pass
 
         self._memory_tickets[ticket_id] = record
         return record

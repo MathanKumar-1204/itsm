@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ITSM AI Helpdesk Platform — Backend API Service</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236366f1' stroke-width='2'><rect x='3' y='11' width='18' height='10' rx='2'/><circle cx='12' cy='5' r='2'/><path d='M12 7v4'/></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    code, pre, .font-mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
+
+  <!-- TOP HEADER -->
+  <header class="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-400 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h1 class="text-base font-extrabold tracking-tight text-white">ITSM AutoPlatform</h1>
+            <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">API v1.0</span>
+          </div>
+          <p class="text-xs text-slate-400">Enterprise AI Helpdesk &amp; ITSM Orchestration Backend</p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-3">
+        <div class="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>Vercel &amp; Production Ready</span>
+        </div>
+        <a href="/api/health" target="_blank" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-lg border border-slate-700 transition flex items-center space-x-1.5 font-medium">
+          <span>Health JSON</span>
+          <span class="text-slate-400">&rarr;</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- HERO SECTION -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div class="relative overflow-hidden rounded-3xl bg-gradient-to-b from-indigo-950/40 via-slate-900/60 to-slate-900 border border-indigo-500/20 p-8 shadow-2xl">
+      <div class="absolute -top-24 -right-24 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div class="relative z-10 max-w-3xl space-y-4">
+        <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-xs font-semibold">
+          <span>⚡ MongoDB Atlas Primary Engine</span>
+          <span class="text-slate-500">•</span>
+          <span>Zero Demo Data</span>
+        </div>
+        <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight">
+          Flask Backend API Service for Enterprise Helpdesk
+        </h2>
+        <p class="text-slate-300 text-sm sm:text-base leading-relaxed">
+          Autonomous IT Service Management API orchestrating MongoDB Cloud Atlas persistence, Pinecone vector RAG with Hugging Face serverless embeddings, Groq GPT-OSS intelligence, and live bi-directional ServiceNow REST synchronization.
+        </p>
+
+        <!-- Quick Metrics Grid -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
+          <div class="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
+            <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Primary Database</span>
+            <span class="text-sm font-bold text-emerald-400 mt-1 flex items-center space-x-1.5">
+              <span>●</span>
+              <span>MongoDB Cloud Atlas</span>
+            </span>
+            <span class="text-[11px] text-slate-500 block mt-0.5 font-mono">itsm_platform</span>
+          </div>
+          <div class="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
+            <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">AI Inference</span>
+            <span class="text-sm font-bold text-indigo-400 mt-1 flex items-center space-x-1.5">
+              <span>⚡</span>
+              <span>Groq GPT-OSS</span>
+            </span>
+            <span class="text-[11px] text-slate-500 block mt-0.5 font-mono">Failover Rotation</span>
+          </div>
+          <div class="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
+            <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Vector RAG</span>
+            <span class="text-sm font-bold text-sky-400 mt-1 flex items-center space-x-1.5">
+              <span>✦</span>
+              <span>Pinecone Index</span>
+            </span>
+            <span class="text-[11px] text-slate-500 block mt-0.5 font-mono">itsm-knowledge (384d)</span>
+          </div>
+          <div class="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
+            <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">ITSM Gateway</span>
+            <span class="text-sm font-bold text-amber-400 mt-1 flex items-center space-x-1.5">
+              <span>🔗</span>
+              <span>ServiceNow REST</span>
+            </span>
+            <span class="text-[11px] text-slate-500 block mt-0.5 font-mono">dev456763</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LIVE INTERACTIVE API TESTER -->
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6 shadow-xl">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+        <div>
+          <h3 class="text-lg font-bold text-white flex items-center space-x-2">
+            <span>Live Interactive API Explorer</span>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Direct Testing</span>
+          </h3>
+          <p class="text-xs text-slate-400 mt-1">Execute live queries against this Flask instance to verify MongoDB connectivity and model responses.</p>
+        </div>
+        <div class="flex items-center space-x-2">
+          <span id="responseStatus" class="text-xs px-2.5 py-1 rounded-lg bg-slate-800 text-slate-400 font-mono">Status: Ready</span>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex flex-wrap gap-2.5">
+        <button onclick="testApi('/api/health')" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-sm flex items-center space-x-1.5">
+          <span>Ping Health Check</span>
+          <span class="text-indigo-200 font-mono text-[11px]">(/api/health)</span>
+        </button>
+        <button onclick="testApi('/api/tickets')" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition flex items-center space-x-1.5">
+          <span>List MongoDB Tickets</span>
+          <span class="text-slate-400 font-mono text-[11px]">(/api/tickets)</span>
+        </button>
+        <button onclick="testApi('/api/software/catalog')" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition flex items-center space-x-1.5">
+          <span>Software Catalog</span>
+          <span class="text-slate-400 font-mono text-[11px]">(/api/software/catalog)</span>
+        </button>
+        <button onclick="testApi('/api/knowledge/documents')" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition flex items-center space-x-1.5">
+          <span>Pinecone RAG Documents</span>
+          <span class="text-slate-400 font-mono text-[11px]">(/api/knowledge/documents)</span>
+        </button>
+        <button onclick="testApi('/api/dashboard/stats')" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition flex items-center space-x-1.5">
+          <span>Operational KPIs</span>
+          <span class="text-slate-400 font-mono text-[11px]">(/api/dashboard/stats)</span>
+        </button>
+      </div>
+
+      <!-- Terminal Output Box -->
+      <div class="relative rounded-2xl bg-slate-950 border border-slate-800/80 overflow-hidden font-mono text-xs">
+        <div class="bg-slate-900/80 px-4 py-2.5 border-b border-slate-800 flex items-center justify-between text-slate-400">
+          <div class="flex items-center space-x-2">
+            <span class="w-3 h-3 rounded-full bg-red-500/70 inline-block"></span>
+            <span class="w-3 h-3 rounded-full bg-amber-500/70 inline-block"></span>
+            <span class="w-3 h-3 rounded-full bg-emerald-500/70 inline-block"></span>
+            <span class="text-[11px] font-semibold text-slate-300 ml-2" id="requestUrl">Console ready — click any endpoint above</span>
+          </div>
+          <button onclick="clearConsole()" class="text-[11px] text-slate-400 hover:text-white transition">Clear</button>
+        </div>
+        <pre id="outputConsole" class="p-4 text-emerald-400 overflow-x-auto max-h-80 leading-relaxed font-mono">// Ready to receive requests.
+// Click any endpoint above to inspect the live JSON payload.
+// All database operations are processed directly through MongoDB Cloud Atlas.</pre>
+      </div>
+    </div>
+
+    <!-- API ENDPOINT DIRECTORY -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      
+      <!-- Column 1: Core Operations -->
+      <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
+        <div class="flex items-center space-x-2 border-b border-slate-800 pb-3">
+          <div class="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold">🎫</div>
+          <h4 class="font-bold text-white text-sm">Tickets &amp; Classification</h4>
+        </div>
+        <div class="space-y-2.5 text-xs">
+          <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+            <div class="space-y-0.5">
+              <span class="font-mono text-emerald-400 font-bold">POST</span>
+              <span class="font-mono text-slate-200 ml-2">/api/tickets</span>
+              <p class="text-slate-400 text-[11px]">Creates incident in MongoDB Atlas &amp; syncs to ServiceNow</p>
+            </div>
+            <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono">Auth</span>
+          </div>
+          <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+            <div class="space-y-0.5">
+              <span class="font-mono text-sky-400 font-bold">GET</span>
+              <span class="font-mono text-slate-200 ml-2">/api/tickets</span>
+              <p class="text-slate-400 text-[11px]">Lists employee's own tickets or staff queue</p>
+            </div>
+            <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono">Auth</span>
+          </div>
+          <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+            <div class="space-y-0.5">
+              <span class="font-mono text-emerald-400 font-bold">POST</span>
+              <span class="font-mono text-slate-200 ml-2">/api/tickets/classify</span>
+              <p class="text-slate-400 text-[11px]">AI Groq ITIL category, impact &amp; urgency classifier</p>
+            </div>
+            <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono">Auth</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Column 2: Conversational AI & Software -->
+      <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
+        <div class="flex items-center space-x-2 border-b border-slate-800 pb-3">
+          <div class="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold">💬</div>
+          <h4 class="font-bold text-white text-sm">AI Agent &amp; Software Governance</h4>
+        </div>
+        <div class="space-y-2.5 text-xs">
+          <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+            <div class="space-y-0.5">
+              <span class="font-mono text-emerald-400 font-bold">POST</span>
+              <span class="font-mono text-slate-200 ml-2">/api/chat/message</span>
+              <p class="text-slate-400 text-[11px]">Multi-intent routing, status check, software &amp; RAG</p>
+            </div>
+            <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono">Groq 120B</span>
+          </div>
+          <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+            <div class="space-y-0.5">
+              <span class="font-mono text-emerald-400 font-bold">POST</span>
+              <span class="font-mono text-slate-200 ml-2">/api/software/evaluate</span>
+              <p class="text-slate-400 text-[11px]">AI Designation compatibility audit (Auto-approve vs Review)</p>
+            </div>
+            <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono">AI Audit</span>
+          </div>
+          <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+            <div class="space-y-0.5">
+              <span class="font-mono text-sky-400 font-bold">GET</span>
+              <span class="font-mono text-slate-200 ml-2">/api/software/catalog</span>
+              <p class="text-slate-400 text-[11px]">Lists corporate software applications</p>
+            </div>
+            <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono">MongoDB</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- VERCEL DEPLOYMENT GUIDE -->
+    <div class="rounded-3xl bg-slate-900 border border-slate-800 p-6 sm:p-8 space-y-4">
+      <div class="flex items-center space-x-3">
+        <div class="w-8 h-8 rounded-lg bg-white text-black flex items-center justify-center font-bold">▲</div>
+        <h3 class="text-base font-bold text-white">Deploying this Flask Backend to Vercel</h3>
+      </div>
+      <p class="text-xs text-slate-400 leading-relaxed">
+        This backend is pre-configured for Vercel Serverless Python deployment using <code class="text-indigo-400">vercel.json</code>. You can deploy it using the Vercel CLI or by connecting your GitHub repository.
+      </p>
+
+      <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 text-xs font-mono">
+        <span class="text-slate-500 uppercase font-semibold text-[10px] block">Vercel CLI Command:</span>
+        <div class="text-emerald-400 bg-slate-900 p-3 rounded-xl border border-slate-800/80 flex items-center justify-between">
+          <span>vercel --prod</span>
+          <button onclick="navigator.clipboard.writeText('vercel --prod'); alert('Copied: vercel --prod')" class="text-slate-400 hover:text-white font-sans text-xs">Copy</button>
+        </div>
+      </div>
+
+      <div class="pt-2">
+        <span class="text-xs font-semibold text-slate-300 block mb-2">Required Environment Variables in Vercel Project Settings:</span>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
+          <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300">
+            <span class="text-indigo-400 font-bold">MONGO_URI</span> &rarr; MongoDB Atlas connection string
+          </div>
+          <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300">
+            <span class="text-indigo-400 font-bold">MONGO_DB_NAME</span> &rarr; itsm_platform
+          </div>
+          <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300">
+            <span class="text-indigo-400 font-bold">GROQ_API_KEY</span> &rarr; Groq GPT-OSS Key
+          </div>
+          <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300">
+            <span class="text-indigo-400 font-bold">PINECONE_API_KEY</span> &rarr; Vector Index API Key
+          </div>
+          <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300">
+            <span class="text-indigo-400 font-bold">SERVICENOW_INSTANCE_URL</span> &rarr; https://dev456763.service-now.com
+          </div>
+          <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300">
+            <span class="text-indigo-400 font-bold">JWT_SECRET</span> &rarr; Secure authentication secret
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-slate-800 bg-slate-950 py-6 text-center text-xs text-slate-500">
+    <p>ITSM AI-Powered Helpdesk Platform &bull; Exclusively powered by MongoDB Cloud Atlas &bull; Vercel Serverless Ready</p>
+  </footer>
+
+  <script>
+    async function testApi(endpoint) {
+      const consoleEl = document.getElementById('outputConsole');
+      const statusEl = document.getElementById('responseStatus');
+      const urlEl = document.getElementById('requestUrl');
+
+      urlEl.innerText = `Fetching: ${endpoint}...`;
+      statusEl.className = 'text-xs px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 font-mono';
+      statusEl.innerText = 'Status: Loading...';
+      consoleEl.innerText = `Sending request to ${endpoint}...`;
+
+      const startTime = performance.now();
+      try {
+        const res = await fetch(endpoint, {
+          headers: {
+            'Authorization': 'Bearer dev-token-admin',
+            'X-Dev-Mode': 'true',
+            'X-Dev-User-Role': 'admin'
+          }
+        });
+        const latency = Math.round(performance.now() - startTime);
+        const data = await res.json();
+
+        urlEl.innerText = `${endpoint} (${latency}ms)`;
+        if (res.ok) {
+          statusEl.className = 'text-xs px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 font-mono';
+          statusEl.innerText = `HTTP ${res.status} OK`;
+        } else {
+          statusEl.className = 'text-xs px-2.5 py-1 rounded-lg bg-red-500/20 text-red-300 font-mono';
+          statusEl.innerText = `HTTP ${res.status} Error`;
+        }
+        consoleEl.innerText = JSON.stringify(data, null, 2);
+      } catch (err) {
+        statusEl.className = 'text-xs px-2.5 py-1 rounded-lg bg-red-500/20 text-red-300 font-mono';
+        statusEl.innerText = 'Connection Error';
+        consoleEl.innerText = `Error: ${err.message}\nMake sure the Flask server is running on port 5000.`;
+      }
+    }
+
+    function clearConsole() {
+      document.getElementById('outputConsole').innerText = '// Console cleared.';
+      document.getElementById('requestUrl').innerText = 'Console ready';
+      document.getElementById('responseStatus').innerText = 'Status: Ready';
+      document.getElementById('responseStatus').className = 'text-xs px-2.5 py-1 rounded-lg bg-slate-800 text-slate-400 font-mono';
+    }
+
+    // Auto-ping health on load
+    window.addEventListener('DOMContentLoaded', () => {
+      testApi('/api/health');
+    });
+  </script>
+</body>
+</html>

@@ -34,7 +34,7 @@ def classify_ticket():
 @tickets_bp.route("/api/tickets", methods=["POST"])
 @require_auth
 def create_ticket():
-    """Creates a new ticket in Supabase and attempts ServiceNow incident sync."""
+    """Creates a new ticket in MongoDB Atlas and attempts ServiceNow incident sync."""
     data = request.get_json() or {}
     try:
         req = TicketCreateRequest(**data)

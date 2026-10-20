@@ -4,7 +4,6 @@ import logging
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 from repositories.db_repository import db
-from repositories.supabase_client import get_supabase_admin_client
 from utils.document_parser import validate_file, extract_text, chunk_document
 from ai.rag_pipeline import rag_pipeline
 from ai.groq_client import groq_client
@@ -38,20 +37,7 @@ class KnowledgeService:
         clean_title = (title or filename).strip()
         storage_path = f"documents/{doc_id}/{filename}"
 
-        # 1. Attempt Supabase storage upload if configured
-        admin_client = get_supabase_admin_client()
-        if admin_client:
-            try:
-                # Ensure bucket exists
-                try:
-                    admin_client.storage.create_bucket("knowledge-base", options={"public": False})
-                except Exception:
-                    pass
-                admin_client.storage.from_("knowledge-base").upload(storage_path, file_bytes)
-            except Exception as e:
-                logger.warning(f"Could not upload file to Supabase storage bucket: {e}")
-
-        # 2. Create document record with 'processing' status
+        # 1. Create document record in MongoDB with 'processing' status
         doc_record = {
             "id": doc_id,
             "uploaded_by": user_id,
