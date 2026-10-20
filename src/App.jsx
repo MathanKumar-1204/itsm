@@ -123,6 +123,7 @@ export default function App() {
 
   // REAL APPLICATION DATA (NO DEMO DATA)
   const [tickets, setTickets] = useState([]);
+  const [ticketsLoading, setTicketsLoading] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [newCommentText, setNewCommentText] = useState('');
   const [commentVisibility, setCommentVisibility] = useState('public');
@@ -138,6 +139,9 @@ export default function App() {
   const [softwareRequests, setSoftwareRequests] = useState([]);
   const [requestModalSw, setRequestModalSw] = useState(null);
   const [requestJustification, setRequestJustification] = useState('');
+  const [requestDesignation, setRequestDesignation] = useState('Full Stack Software Engineer');
+  const [requestEvaluating, setRequestEvaluating] = useState(false);
+  const [requestEvaluationPreview, setRequestEvaluationPreview] = useState(null);
 
   // Audit Logs (Admin)
   const [auditLogs, setAuditLogs] = useState([]);
@@ -205,6 +209,7 @@ export default function App() {
 
   // --- DATA SYNCHRONIZATION FROM MONGODB / BACKEND ---
   const loadTickets = useCallback(async () => {
+    setTicketsLoading(true);
     try {
       const res = await fetch('http://localhost:5000/api/tickets', {
         headers: getAuthHeaders(),
@@ -215,8 +220,12 @@ export default function App() {
       }
     } catch (err) {
       console.warn("Could not load tickets:", err);
+    } finally {
+      setTicketsLoading(false);
     }
   }, [getAuthHeaders]);
+
+  const fetchTickets = loadTickets;
 
   const loadKnowledge = useCallback(async () => {
     try {
@@ -271,6 +280,11 @@ export default function App() {
     }
   }, [role, getAuthHeaders]);
 
+  // Strictly filter tickets so employees only see their own tickets
+  const displayedTickets = (role === 'employee' && currentUser)
+    ? tickets.filter(t => t.requester_id === currentUser.id || (currentUser.email && t.requester_email === currentUser.email) || (currentUser.full_name && t.requester_name === currentUser.full_name))
+    : tickets;
+
   // Initial Boot & Health Check
   useEffect(() => {
     fetch('http://localhost:5000/api/health')
@@ -294,6 +308,43 @@ export default function App() {
     loadSoftware();
     loadAuditLogs();
   }, [loadTickets, loadKnowledge, loadSoftware, loadAuditLogs]);
+
+  // Live AI Governance Pre-evaluation for Software Requests
+  useEffect(() => {
+    if (!requestModalSw) {
+      setRequestEvaluationPreview(null);
+      return;
+    }
+
+    let active = true;
+    const timer = setTimeout(async () => {
+      setRequestEvaluating(true);
+      try {
+        const res = await fetch('http://localhost:5000/api/software/evaluate', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            software_id: requestModalSw.id,
+            designation: requestDesignation,
+            business_justification: requestJustification || 'Standard corporate software access',
+          })
+        });
+        const data = await res.json();
+        if (active && data.success && data.evaluation) {
+          setRequestEvaluationPreview(data.evaluation);
+        }
+      } catch (err) {
+        console.warn("Software evaluation failed:", err);
+      } finally {
+        if (active) setRequestEvaluating(false);
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [requestModalSw, requestDesignation, requestJustification, getAuthHeaders]);
 
   // --- AUTHENTICATION HANDLERS ---
   const handleLoginSubmit = async (e) => {
@@ -514,16 +565,28 @@ export default function App() {
 
       if (data.success) {
         if (data.session_id) setChatSessionId(data.session_id);
+        const actionPayload = data.metadata?.action_payload || data.response?.metadata?.action_payload || null;
         const botMsg = {
           id: `msg-${Date.now() + 1}`,
           role: 'assistant',
           content: typeof data.response === 'string' ? data.response : (data.content || data.response?.content || JSON.stringify(data.response)),
           sources: data.sources || (data.response?.metadata?.sources) || [],
           actions: data.suggested_actions || (data.response?.metadata?.suggested_prompts) || ['Connect to VPN', 'Report Issue'],
-          ticket_draft: data.ticket_draft || (data.response?.metadata?.action_payload?.ticket_data) || null,
+          ticket_draft: data.ticket_draft || (actionPayload?.ticket_data) || null,
+          action_payload: actionPayload,
         };
         setChatMessages(prev => [...prev, botMsg]);
         setChatLoading(false);
+
+        // Auto-refresh tickets or software requests when modified in chat
+        if (actionPayload) {
+          const pType = actionPayload.type;
+          if (pType === 'ticket_created' || pType === 'ticket_view') {
+            loadTickets();
+          } else if (pType === 'software_request_created') {
+            loadSoftware();
+          }
+        }
         return;
       }
     } catch (err) {
@@ -602,6 +665,7 @@ export default function App() {
         body: JSON.stringify({
           software_id: requestModalSw.id,
           business_justification: requestJustification || 'Standard corporate software access',
+          designation: requestDesignation,
         })
       });
       const data = await res.json();
@@ -609,6 +673,7 @@ export default function App() {
         setSoftwareRequests(prev => [data.request, ...prev]);
         setRequestModalSw(null);
         setRequestJustification('');
+        loadSoftware();
       }
     } catch (err) {
       console.error("Software request failed:", err);
@@ -781,7 +846,7 @@ export default function App() {
                 { id: 'overview', label: 'Overview', icon: 'dashboard' },
                 { id: 'intake', label: 'Intelligent Intake', icon: 'sparkles' },
                 { id: 'chat', label: 'AI Helpdesk Chat', icon: 'bot' },
-                { id: 'my_tickets', label: 'My Tickets', icon: 'ticket', badge: tickets.length },
+                { id: 'my_tickets', label: 'My Tickets', icon: 'ticket', badge: displayedTickets.length },
                 { id: 'automation', label: 'Self-Heal Diagnostic', icon: 'wrench' },
                 { id: 'knowledge', label: 'Knowledge Base', icon: 'book' },
                 { id: 'software', label: 'Software Requests', icon: 'box' },
@@ -966,7 +1031,7 @@ export default function App() {
                     <span className="text-xs font-semibold uppercase text-slate-500 tracking-wider">My Active Tickets</span>
                     <Icon name="ticket" className="w-5 h-5 text-indigo-600" />
                   </div>
-                  <p className="text-2xl font-bold text-slate-900">{tickets.filter(t => t.status !== 'resolved' && t.status !== 'closed').length}</p>
+                  <p className="text-2xl font-bold text-slate-900">{displayedTickets.filter(t => t.status !== 'resolved' && t.status !== 'closed').length}</p>
                   <p className="text-xs text-slate-400 mt-1">Live from MongoDB</p>
                 </div>
 
@@ -975,7 +1040,7 @@ export default function App() {
                     <span className="text-xs font-semibold uppercase text-slate-500 tracking-wider">Resolved Tickets</span>
                     <Icon name="check" className="w-5 h-5 text-emerald-600" />
                   </div>
-                  <p className="text-2xl font-bold text-slate-900">{tickets.filter(t => t.status === 'resolved' || t.status === 'closed').length}</p>
+                  <p className="text-2xl font-bold text-slate-900">{displayedTickets.filter(t => t.status === 'resolved' || t.status === 'closed').length}</p>
                   <p className="text-xs text-emerald-600 mt-1">Closed successfully</p>
                 </div>
 
@@ -1007,7 +1072,7 @@ export default function App() {
                   </button>
                 </div>
 
-                {tickets.length === 0 ? (
+                {displayedTickets.length === 0 ? (
                   <div className="py-8 text-center text-slate-500 text-xs">
                     <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-2">
                       <Icon name="ticket" className="w-5 h-5" />
@@ -1017,7 +1082,7 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="divide-y divide-slate-100">
-                    {tickets.slice(0, 4).map(ticket => (
+                    {displayedTickets.slice(0, 4).map(ticket => (
                       <div key={ticket.id} className="py-3 flex items-center justify-between">
                         <div className="space-y-0.5">
                           <div className="flex items-center space-x-2">
@@ -1203,6 +1268,122 @@ export default function App() {
                     <div className={`max-w-[80%] rounded-2xl p-4 text-xs leading-relaxed ${msg.role === 'user' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-800 border border-slate-200'}`}>
                       <p className="whitespace-pre-line">{msg.content}</p>
 
+                      {/* Interactive Ticket View Card */}
+                      {msg.action_payload?.type === 'ticket_view' && msg.action_payload.ticket && (
+                        <div className="mt-3 p-3 bg-white rounded-xl border border-indigo-200 shadow-xs space-y-2 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono font-bold text-indigo-700">{msg.action_payload.ticket.ticket_number}</span>
+                            <StatusBadge state={msg.action_payload.ticket.state} status={msg.action_payload.ticket.status} />
+                          </div>
+                          <p className="font-semibold text-slate-800">{msg.action_payload.ticket.title}</p>
+                          <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px]">
+                            <span className="text-slate-500 font-mono">ServiceNow: {msg.action_payload.ticket.external_record_id || 'INC0010009'}</span>
+                            <button
+                              onClick={() => {
+                                setSelectedTicket(msg.action_payload.ticket);
+                                setActiveTab('tickets');
+                              }}
+                              className="text-indigo-600 hover:text-indigo-800 font-bold underline"
+                            >
+                              Open Ticket Details &rarr;
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Interactive Software Request Confirmation Card */}
+                      {msg.action_payload?.type === 'software_request_created' && msg.action_payload.request && (
+                        <div className="mt-3 p-3 bg-white rounded-xl border border-indigo-200 shadow-xs space-y-2 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono font-bold text-indigo-700">{msg.action_payload.request.request_number}</span>
+                            <StatusBadge status={msg.action_payload.request.status} />
+                          </div>
+                          <p className="font-semibold text-slate-800">Software: {msg.action_payload.request.software_name}</p>
+                          <p className="text-[11px] text-slate-500">Designation Assessed: <span className="font-semibold text-slate-700">{msg.action_payload.request.designation}</span></p>
+                          <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px]">
+                            <span className="text-slate-500 font-medium">
+                              {msg.action_payload.request.ai_recommendation === 'auto_approved' ? '⚡ Auto-Approved by AI' : '⏳ Queued for Manager Review'}
+                            </span>
+                            <button
+                              onClick={() => setActiveTab('software')}
+                              className="text-indigo-600 hover:text-indigo-800 font-bold underline"
+                            >
+                              View Software Queue &rarr;
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Interactive Ticket Created Card */}
+                      {msg.action_payload?.type === 'ticket_created' && msg.action_payload.ticket && (
+                        <div className="mt-3 p-3 bg-emerald-50 rounded-xl border border-emerald-200 shadow-xs space-y-2 text-xs text-emerald-900">
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono font-bold text-emerald-800">{msg.action_payload.ticket.ticket_number}</span>
+                            <PriorityBadge priority={msg.action_payload.ticket.priority} />
+                          </div>
+                          <p className="font-semibold">{msg.action_payload.ticket.title}</p>
+                          <div className="flex items-center justify-between pt-1 border-t border-emerald-200 text-[11px]">
+                            <span>ServiceNow: <strong className="font-mono">{msg.action_payload.ticket.external_record_id || 'Synced'}</strong></span>
+                            <button
+                              onClick={() => {
+                                setSelectedTicket(msg.action_payload.ticket);
+                                setActiveTab('tickets');
+                              }}
+                              className="text-emerald-800 hover:text-emerald-950 font-bold underline"
+                            >
+                              View in Tickets &rarr;
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Interactive In-Chat Ticket Draft Submission */}
+                      {msg.ticket_draft && (
+                        <div className="mt-3 p-3 bg-white rounded-xl border border-amber-200 shadow-xs space-y-2 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-amber-800">Draft Ticket Ready for Submission</span>
+                            <PriorityBadge priority={msg.ticket_draft.calculated_priority || msg.ticket_draft.priority || 'medium'} />
+                          </div>
+                          <p className="font-semibold text-slate-800">{msg.ticket_draft.title}</p>
+                          <p className="text-slate-500 text-[11px] line-clamp-2">{msg.ticket_draft.description}</p>
+                          <div className="flex justify-end pt-1">
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch('http://localhost:5000/api/tickets', {
+                                    method: 'POST',
+                                    headers: getAuthHeaders(),
+                                    body: JSON.stringify({
+                                      title: msg.ticket_draft.title,
+                                      description: msg.ticket_draft.description,
+                                      category: msg.ticket_draft.category || 'General IT',
+                                      priority: msg.ticket_draft.calculated_priority || msg.ticket_draft.priority || 'medium',
+                                      impact: msg.ticket_draft.impact || 'medium',
+                                      urgency: msg.ticket_draft.urgency || 'medium',
+                                    })
+                                  });
+                                  const d = await res.json();
+                                  if (d.success && d.ticket) {
+                                    loadTickets();
+                                    setChatMessages(c => [...c, {
+                                      id: `msg-${Date.now()}`,
+                                      role: 'assistant',
+                                      content: `✓ Successfully created ticket **${d.ticket.ticket_number}** (ServiceNow: ${d.ticket.external_record_id || 'Synced'}). Our support engineering team has been notified.`,
+                                      action_payload: { type: 'ticket_created', ticket: d.ticket }
+                                    }]);
+                                  }
+                                } catch (err) {
+                                  console.error("Direct ticket submission failed:", err);
+                                }
+                              }}
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs shadow"
+                            >
+                              Confirm & Submit Ticket &rarr;
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Grounding Citations */}
                       {msg.sources && msg.sources.length > 0 && (
                         <div className="mt-3 pt-2.5 border-t border-slate-200/80 space-y-1">
@@ -1280,7 +1461,7 @@ export default function App() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={fetchTickets}
+                    onClick={loadTickets}
                     disabled={ticketsLoading}
                     className="bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold px-3 py-2 rounded-lg flex items-center space-x-1.5 border border-slate-200 shadow-2xs transition"
                     title="Refresh and sync live state from ServiceNow"
@@ -1314,7 +1495,7 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {tickets.length === 0 ? (
+                    {displayedTickets.length === 0 ? (
                       <tr>
                         <td colSpan={8} className="py-12 px-4 text-center">
                           <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -1336,7 +1517,7 @@ export default function App() {
                         </td>
                       </tr>
                     ) : (
-                      tickets.map(ticket => (
+                      displayedTickets.map(ticket => (
                         <tr key={ticket.id} className="hover:bg-slate-50/80 transition">
                           <td className="py-3.5 px-4 font-mono font-bold text-indigo-600 text-xs">{ticket.ticket_number}</td>
                           <td className="py-3.5 px-4 font-semibold text-slate-900 max-w-xs truncate">{ticket.title}</td>
@@ -1582,8 +1763,9 @@ export default function App() {
                     <tr>
                       <th className="py-3 px-4 font-semibold">Request ID</th>
                       <th className="py-3 px-4 font-semibold">Software</th>
-                      <th className="py-3 px-4 font-semibold">Requester</th>
+                      <th className="py-3 px-4 font-semibold">Requester & Designation</th>
                       <th className="py-3 px-4 font-semibold">Business Justification</th>
+                      <th className="py-3 px-4 font-semibold">AI Governance</th>
                       <th className="py-3 px-4 font-semibold">Status</th>
                       {role !== 'employee' && <th className="py-3 px-4 font-semibold text-right">Approval Action</th>}
                     </tr>
@@ -1591,7 +1773,7 @@ export default function App() {
                   <tbody className="divide-y divide-slate-100">
                     {softwareRequests.length === 0 ? (
                       <tr>
-                        <td colSpan={role !== 'employee' ? 6 : 5} className="py-8 text-center text-slate-500 text-xs">
+                        <td colSpan={role !== 'employee' ? 7 : 6} className="py-8 text-center text-slate-500 text-xs">
                           No software requests submitted yet. Select an application from the catalog above to request access.
                         </td>
                       </tr>
@@ -1600,8 +1782,36 @@ export default function App() {
                         <tr key={req.id} className="hover:bg-slate-50/80 transition">
                           <td className="py-3 px-4 font-mono font-bold text-indigo-600 text-xs">{req.request_number || req.req_num}</td>
                           <td className="py-3 px-4 font-semibold text-slate-900 text-xs">{req.software_name || 'Software App'}</td>
-                          <td className="py-3 px-4 text-xs text-slate-600">{req.requester_name || req.requester || 'Employee'}</td>
+                          <td className="py-3 px-4 text-xs">
+                            <div className="font-semibold text-slate-900">{req.requester_name || req.requester || 'Employee'}</div>
+                            <div className="text-[11px] text-indigo-600 font-medium">{req.designation || 'Software Engineer'}</div>
+                          </td>
                           <td className="py-3 px-4 text-xs text-slate-500 max-w-xs truncate">{req.business_justification || req.justification}</td>
+                          <td className="py-3 px-4 text-xs">
+                            {req.ai_recommendation === 'auto_approved' || req.recommendation === 'auto_approved' ? (
+                              <div className="space-y-0.5">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  ⚡ Auto-Approved
+                                </span>
+                                {req.ai_evaluation && (
+                                  <p className="text-[10px] text-slate-500 max-w-xs truncate" title={req.ai_evaluation}>
+                                    {req.ai_evaluation}
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="space-y-0.5">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                  ⏳ Manager Review
+                                </span>
+                                {req.ai_evaluation && (
+                                  <p className="text-[10px] text-slate-500 max-w-xs truncate" title={req.ai_evaluation}>
+                                    {req.ai_evaluation}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </td>
                           <td className="py-3 px-4"><StatusBadge status={req.status} /></td>
                           {role !== 'employee' && (
                             <td className="py-3 px-4 text-right space-x-1.5">
@@ -2118,28 +2328,90 @@ export default function App() {
         </div>
       )}
 
-      {/* --- SOFTWARE REQUEST MODAL --- */}
+      {/* --- SOFTWARE REQUEST MODAL WITH AI DESIGNATION GOVERNANCE --- */}
       {requestModalSw && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-start justify-between border-b border-slate-100 pb-3">
               <div>
                 <span className="text-xs font-bold text-indigo-600 uppercase">{requestModalSw.category}</span>
                 <h3 className="text-base font-bold text-slate-900">{requestModalSw.name}</h3>
+                <p className="text-xs text-slate-400 font-medium">{requestModalSw.vendor}</p>
               </div>
               <button onClick={() => setRequestModalSw(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
             </div>
 
-            <form onSubmit={handleSoftwareRequestSubmit} className="space-y-3">
+            <form onSubmit={handleSoftwareRequestSubmit} className="space-y-3.5">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 uppercase">Employee Designation / Role *</label>
+                <select
+                  value={requestDesignation}
+                  onChange={(e) => setRequestDesignation(e.target.value)}
+                  className="w-full p-2 border border-slate-300 rounded-lg text-xs bg-white font-medium focus:ring-1 focus:ring-indigo-500"
+                >
+                  <option value="Full Stack Software Engineer">Full Stack Software Engineer</option>
+                  <option value="DevOps Specialist">DevOps Specialist</option>
+                  <option value="Data Scientist">Data Scientist</option>
+                  <option value="UI/UX Designer">UI/UX Designer</option>
+                  <option value="Marketing Specialist">Marketing Specialist</option>
+                  <option value="HR Specialist">HR Specialist</option>
+                  <option value="Financial Analyst">Financial Analyst</option>
+                  <option value="IT Support Specialist">IT Support Specialist</option>
+                  <option value="Product Manager">Product Manager</option>
+                </select>
+                <p className="text-[11px] text-slate-400">AI audits software compatibility against this role and enterprise policy.</p>
+              </div>
+
+              {/* AI Governance Live Evaluation Preview Card */}
+              <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-1.5 transition">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center space-x-1.5">
+                    <Icon name="sparkles" className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>AI Designation Audit</span>
+                  </span>
+                  {requestEvaluating ? (
+                    <span className="text-[10px] text-slate-500 flex items-center space-x-1 font-mono">
+                      <Icon name="refresh" className="w-3 h-3 animate-spin text-indigo-600" />
+                      <span>Auditing role fit...</span>
+                    </span>
+                  ) : requestEvaluationPreview ? (
+                    requestEvaluationPreview.recommendation === 'auto_approved' ? (
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded border border-emerald-300 flex items-center space-x-1">
+                        <span>⚡</span>
+                        <span>Auto-Approval Eligible</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded border border-amber-300 flex items-center space-x-1">
+                        <span>⏳</span>
+                        <span>Manager Review Required</span>
+                      </span>
+                    )
+                  ) : (
+                    <span className="text-[10px] text-slate-400">Policy Assessment Ready</span>
+                  )}
+                </div>
+
+                {requestEvaluationPreview && (
+                  <div className="text-xs text-slate-700 space-y-1 pt-1 border-t border-slate-200/60">
+                    <p className="text-[11px] leading-relaxed">
+                      {requestEvaluationPreview.ai_rationale}
+                    </p>
+                    <div className="text-[10px] text-slate-400 font-mono">
+                      Confidence: {Math.round((requestEvaluationPreview.confidence || 0.9) * 100)}% • Assessed Role: {requestEvaluationPreview.designation_assessed || requestDesignation}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700 uppercase">Business Justification *</label>
                 <textarea
                   rows={3}
                   value={requestJustification}
                   onChange={(e) => setRequestJustification(e.target.value)}
-                  placeholder="Describe project requirements or departmental need for this tool..."
+                  placeholder="Describe your project requirements or corporate objective for this software..."
                   required
-                  className="w-full p-2.5 border border-slate-300 rounded-lg text-xs"
+                  className="w-full p-2.5 border border-slate-300 rounded-lg text-xs focus:ring-1 focus:ring-indigo-500"
                 />
               </div>
 
@@ -2147,15 +2419,16 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setRequestModalSw(null)}
-                  className="px-3 py-1.5 border border-slate-300 rounded text-xs text-slate-600 hover:bg-slate-50"
+                  className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs text-slate-600 hover:bg-slate-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-1.5 rounded shadow"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-1.5 rounded-lg shadow flex items-center space-x-1.5"
                 >
-                  Submit Request
+                  <Icon name="check" className="w-3.5 h-3.5" />
+                  <span>Submit Request</span>
                 </button>
               </div>
             </form>

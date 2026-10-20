@@ -67,9 +67,13 @@ def get_authenticated_user() -> Optional[Dict[str, Any]]:
                     "role": db_user.get("role", verified_user["role"]),
                     "full_name": db_user.get("full_name", verified_user["full_name"]),
                     "department": db_user.get("department", verified_user["department"]),
+                    "designation": db_user.get("designation") or request.headers.get("X-Employee-Designation") or verified_user.get("designation", "Full Stack Software Engineer"),
                     "token": token,
                 }
-            return verified_user
+            return {
+                **verified_user,
+                "designation": request.headers.get("X-Employee-Designation") or verified_user.get("designation", "Full Stack Software Engineer")
+            }
 
     # 2. Development or quick-switch token fallback
     is_dev_request = (
@@ -94,14 +98,15 @@ def get_authenticated_user() -> Optional[Dict[str, Any]]:
             dev_role = "admin"
 
         role_presets = {
-            "admin": ("admin@enterprise.com", "Morgan Enterprise Admin", "IT Operations"),
-            "it_agent": ("agent@enterprise.com", "Jordan Support Agent", "IT Support"),
-            "employee": ("employee@enterprise.com", "Alex Employee", "Engineering"),
+            "admin": ("admin@enterprise.com", "Morgan Enterprise Admin", "IT Operations", "Senior IT Operations Director"),
+            "it_agent": ("agent@enterprise.com", "Jordan Support Agent", "IT Support", "IT Support Specialist"),
+            "employee": ("employee@enterprise.com", "Alex Employee", "Engineering", "Full Stack Software Engineer"),
         }
-        def_email, def_name, def_dept = role_presets.get(dev_role, role_presets["admin"])
+        def_email, def_name, def_dept, def_desig = role_presets.get(dev_role, role_presets["admin"])
 
         dev_email = request.headers.get("X-Dev-User-Email", def_email)
         dev_name = request.headers.get("X-Dev-User-Name", def_name)
+        dev_desig = request.headers.get("X-Employee-Designation", def_desig)
         dev_id = request.headers.get("X-Dev-User-Id", f"00000000-0000-0000-0000-00000000000{1 if dev_role == 'admin' else (2 if dev_role == 'it_agent' else 3)}")
 
         return {
@@ -110,6 +115,7 @@ def get_authenticated_user() -> Optional[Dict[str, Any]]:
             "role": dev_role,
             "full_name": dev_name,
             "department": def_dept,
+            "designation": dev_desig,
             "token": token or f"dev-token-{dev_role}",
             "is_dev": True,
         }

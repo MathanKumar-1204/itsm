@@ -17,12 +17,16 @@ class TicketService:
     @classmethod
     def create_ticket(cls, data: Dict[str, Any], user: Dict[str, Any]) -> Dict[str, Any]:
         requester_id = user["id"]
+        requester_name = user.get("full_name") or user.get("email", "Employee")
+        requester_email = user.get("email")
         impact = data.get("impact", "medium")
         urgency = data.get("urgency", "medium")
         priority = calculate_priority(impact, urgency)
 
         record_data = {
             "requester_id": requester_id,
+            "requester_name": requester_name,
+            "requester_email": requester_email,
             "title": data["title"],
             "description": data["description"],
             "category": data["category"],
@@ -75,9 +79,12 @@ class TicketService:
     def list_tickets(cls, user: Dict[str, Any], **filters) -> List[Dict[str, Any]]:
         user_role = user.get("role", "employee")
         user_id = user.get("id")
+        user_email = user.get("email")
 
         if user_role == "employee":
             filters["requester_id"] = user_id
+            if user_email:
+                filters["requester_email"] = user_email
 
         tickets = db.list_tickets(**filters)
 

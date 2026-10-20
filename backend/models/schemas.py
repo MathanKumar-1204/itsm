@@ -110,7 +110,14 @@ class KnowledgeArticleUpdateRequest(BaseModel):
 
 class SoftwareRequestCreate(BaseModel):
     software_id: str = Field(..., min_length=1)
-    business_justification: str = Field(..., min_length=5)
+    business_justification: str = Field(..., min_length=3)
+    designation: Optional[str] = None
+
+
+class SoftwareRequestEvaluate(BaseModel):
+    software_id: str = Field(..., min_length=1)
+    business_justification: Optional[str] = ""
+    designation: Optional[str] = None
 
 
 class SoftwareRequestApprove(BaseModel):

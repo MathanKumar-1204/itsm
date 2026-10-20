@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 from repositories.db_repository import db
 from integrations.servicenow import servicenow_client
+from ai.software_evaluator import SoftwareAccessEvaluator
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,32 @@ class SoftwareService:
         return db.list_software_catalog(enabled_only=enabled_only)
 
     @classmethod
-    def create_request(cls, software_id: str, justification: str, user: Dict[str, Any]) -> Dict[str, Any]:
+    def evaluate_request(
+        cls,
+        software_id: str,
+        user: Dict[str, Any],
+        justification: str = "",
+        designation: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Pre-evaluates a software request using AI governance before submission."""
+        software = db.get_software_item(software_id)
+        if not software:
+            raise ValueError(f"Software item '{software_id}' not found.")
+        return SoftwareAccessEvaluator.evaluate_request(
+            software=software,
+            user=user,
+            justification=justification,
+            designation=designation
+        )
+
+    @classmethod
+    def create_request(
+        cls,
+        software_id: str,
+        justification: str,
+        user: Dict[str, Any],
+        designation: Optional[str] = None
+    ) -> Dict[str, Any]:
         user_id = user["id"]
         software = db.get_software_item(software_id)
         if not software:
@@ -22,29 +48,50 @@ class SoftwareService:
         if not software.get("enabled", True):
             raise ValueError(f"Software '{software.get('name')}' is currently disabled in the catalogue.")
 
-        approval_needed = software.get("approval_required", True)
         provisioning_mode = software.get("provisioning_mode", "simulated")
 
-        initial_status = "pending_approval" if approval_needed else "approved"
-        prov_status = "pending" if approval_needed else "provisioning"
+        # Execute AI Access Governance evaluation based on employee designation
+        evaluation = SoftwareAccessEvaluator.evaluate_request(
+            software=software,
+            user=user,
+            justification=justification,
+            designation=designation
+        )
+
+        is_auto_approved = evaluation.get("recommendation") == "auto_approved" or evaluation.get("status") == "approved"
+        initial_status = "approved" if is_auto_approved else "pending_approval"
+        prov_status = "provisioning" if is_auto_approved else "pending"
+
+        approved_by = (
+            f"AI_AUTO_APPROVAL ({evaluation.get('designation_assessed')})"
+            if is_auto_approved else None
+        )
+        approval_comment = evaluation.get("ai_rationale")
 
         req_data = {
             "requester_id": user_id,
+            "requester_name": user.get("full_name") or user.get("email", "Employee"),
             "software_id": software_id,
+            "software_name": software.get("name"),
             "business_justification": justification,
+            "designation": evaluation.get("designation_assessed", user.get("designation", "Employee")),
+            "department": user.get("department", "General"),
+            "ai_evaluation": evaluation.get("ai_rationale"),
+            "ai_recommendation": evaluation.get("recommendation"),
+            "ai_confidence": evaluation.get("confidence", 0.9),
             "status": initial_status,
             "provisioning_status": prov_status,
             "execution_mode": provisioning_mode,
-            "approved_by": None if approval_needed else "SYSTEM_PRE_APPROVED",
-            "approval_comment": None if approval_needed else "Standard pre-approved corporate software tool.",
+            "approved_by": approved_by,
+            "approval_comment": approval_comment,
         }
 
         # Create record in database
         req = db.create_software_request(req_data)
         req_id = req["id"]
 
-        # If pre-approved, automatically execute provisioning
-        if not approval_needed:
+        # If auto-approved by AI, automatically execute provisioning
+        if is_auto_approved:
             cls.execute_provisioning(req_id, user)
             req = db.get_software_request(req_id)
 
@@ -53,7 +100,12 @@ class SoftwareService:
             action="submit_software_request",
             entity_type="software_request",
             entity_id=req_id,
-            metadata={"software_name": software.get("name"), "status": req.get("status")},
+            metadata={
+                "software_name": software.get("name"),
+                "status": req.get("status"),
+                "ai_recommendation": evaluation.get("recommendation"),
+                "designation": evaluation.get("designation_assessed"),
+            },
         )
 
         return req

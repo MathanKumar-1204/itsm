@@ -332,6 +332,7 @@ class DBRepository:
     def list_tickets(
         self,
         requester_id: Optional[str] = None,
+        requester_email: Optional[str] = None,
         status: Optional[str] = None,
         category: Optional[str] = None,
         priority: Optional[str] = None,
@@ -344,8 +345,13 @@ class DBRepository:
         if mongo_db is not None:
             try:
                 query: Dict[str, Any] = {}
-                if requester_id:
+                if requester_id and requester_email:
+                    query["$or"] = [{"requester_id": requester_id}, {"requester_email": requester_email}]
+                elif requester_id:
                     query["requester_id"] = requester_id
+                elif requester_email:
+                    query["requester_email"] = requester_email
+
                 if status:
                     query["status"] = status
                 if category:
@@ -363,8 +369,12 @@ class DBRepository:
 
         # Memory store
         items = list(self._memory_tickets.values())
-        if requester_id:
+        if requester_id and requester_email:
+            items = [t for t in items if t.get("requester_id") == requester_id or t.get("requester_email") == requester_email]
+        elif requester_id:
             items = [t for t in items if t.get("requester_id") == requester_id]
+        elif requester_email:
+            items = [t for t in items if t.get("requester_email") == requester_email]
         if status:
             items = [t for t in items if t.get("status") == status]
         if category:

@@ -76,6 +76,77 @@ class ServiceNowClient:
                 "message": f"Connection exception: {str(e)}",
             }
 
+    def get_or_create_caller(self, requester_name: Optional[str] = None, requester_email: Optional[str] = None) -> str:
+        """
+        Dynamically resolves or creates the caller user in ServiceNow sys_user table.
+        Ensures tickets in ServiceNow are attributed directly to the signed-in employee.
+        """
+        if self.is_demo_mode():
+            return "demo_caller_sys_id"
+
+        cache_key = requester_email or requester_name or "default"
+        if not hasattr(self, "_caller_cache"):
+            self._caller_cache = {}
+        if cache_key in self._caller_cache:
+            return self._caller_cache[cache_key]
+
+        headers = {"Accept": "application/json", "Content-Type": "application/json"}
+        auth = (self.username, self.password)
+
+        # 1. Search sys_user for existing user by email or name
+        query_parts = []
+        if requester_email:
+            query_parts.append(f"email={requester_email}")
+        if requester_name:
+            first = requester_name.split()[0]
+            query_parts.append(f"nameLIKE{first}")
+            query_parts.append(f"user_name={first.lower()}")
+
+        if query_parts:
+            sysparm_query = "^OR".join(query_parts)
+            search_url = f"{self.instance_url}/api/now/table/sys_user?sysparm_query={sysparm_query}&sysparm_limit=1"
+            try:
+                resp = requests.get(search_url, auth=auth, headers=headers, timeout=8)
+                if resp.status_code == 200:
+                    results = resp.json().get("result", [])
+                    if results:
+                        sys_id = results[0]["sys_id"]
+                        self._caller_cache[cache_key] = sys_id
+                        logger.info(f"Resolved ServiceNow caller '{results[0].get('name')}' (sys_id: {sys_id})")
+                        return sys_id
+            except Exception as e:
+                logger.warning(f"Error querying ServiceNow sys_user: {e}")
+
+        # 2. Provision new user in ServiceNow sys_user if not present
+        if requester_name or requester_email:
+            name_parts = (requester_name or "Employee").split()
+            first_name = name_parts[0]
+            last_name = name_parts[1] if len(name_parts) > 1 else "Employee"
+            user_name = (requester_email.split("@")[0] if requester_email else first_name).lower().replace(".", "_")
+
+            create_url = f"{self.instance_url}/api/now/table/sys_user"
+            user_payload = {
+                "user_name": user_name,
+                "first_name": first_name,
+                "last_name": last_name,
+                "name": f"{first_name} {last_name}",
+                "email": requester_email or f"{user_name}@enterprise.com",
+            }
+            try:
+                c_resp = requests.post(create_url, json=user_payload, auth=auth, headers=headers, timeout=8)
+                if c_resp.status_code in (200, 201):
+                    res_user = c_resp.json().get("result", {})
+                    sys_id = res_user.get("sys_id")
+                    if sys_id:
+                        self._caller_cache[cache_key] = sys_id
+                        logger.info(f"Provisioned new ServiceNow caller '{first_name} {last_name}' (sys_id: {sys_id})")
+                        return sys_id
+            except Exception as e:
+                logger.warning(f"Error creating user in ServiceNow sys_user: {e}")
+
+        # Fallback to system admin default
+        return "681ccaf9c0a8016400b98a06818d57c7"
+
     def create_incident(self, ticket: Dict[str, Any]) -> Dict[str, Any]:
         """
         Creates an incident in ServiceNow Table API or returns a clearly marked simulated reference in Demo Mode.
@@ -107,8 +178,10 @@ class ServiceNowClient:
         elif ticket.get("urgency") in ("high", "medium"):
             sn_urgency = "2"
 
-        # Set caller to System Administrator sys_id in ServiceNow
-        caller_sys_id = "681ccaf9c0a8016400b98a06818d57c7"
+        # Dynamically resolve caller to the real signed-in employee
+        caller_name = ticket.get("requester_name")
+        caller_email = ticket.get("requester_email")
+        caller_sys_id = self.get_or_create_caller(requester_name=caller_name, requester_email=caller_email)
 
         payload = {
             "short_description": f"[{ticket.get('ticket_number', 'INC-1000')}] {ticket.get('title', '')}",
@@ -119,7 +192,7 @@ class ServiceNowClient:
             "caller_id": caller_sys_id,
             "correlation_id": ticket.get("ticket_number", ""),
             "correlation_display": "ITSM AI Helpdesk",
-            "comments": f"Created via ITSM AI Helpdesk Platform.\nInternal Ticket: {ticket.get('ticket_number')}\nRequester: {ticket.get('requester_name', 'Employee')}",
+            "comments": f"Created via ITSM AI Helpdesk Platform.\nInternal Ticket: {ticket.get('ticket_number')}\nRequester: {caller_name or 'Employee'} ({caller_email or 'No email'})",
         }
 
         url = f"{self.instance_url}/api/now/table/incident"

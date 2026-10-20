@@ -26,10 +26,27 @@ class Config:
     SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
     SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
 
-    # Groq API configuration (GPT-OSS models)
+    # Groq API configuration (GPT-OSS models with multi-key failover pool)
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+    GROQ_API_KEY_FALLBACK_1 = os.getenv("GROQ_API_KEY_FALLBACK_1", "").strip()
+    GROQ_API_KEY_FALLBACK_2 = os.getenv("GROQ_API_KEY_FALLBACK_2", "").strip()
     GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip()
     GROQ_FALLBACK_MODEL = os.getenv("GROQ_FALLBACK_MODEL", "openai/gpt-oss-20b").strip()
+
+    @classmethod
+    def get_groq_api_keys(cls):
+        """Returns ordered list of unique configured Groq API keys for failover rotation."""
+        keys = []
+        for k in [cls.GROQ_API_KEY, cls.GROQ_API_KEY_FALLBACK_1, cls.GROQ_API_KEY_FALLBACK_2]:
+            if k and k not in keys:
+                keys.append(k)
+        extra = os.getenv("GROQ_API_KEYS", "")
+        if extra:
+            for item in extra.split(","):
+                clean = item.strip()
+                if clean and clean not in keys:
+                    keys.append(clean)
+        return keys
 
     # Pinecone Vector Database
     PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "").strip()
@@ -64,7 +81,8 @@ class Config:
             "mongodb_configured": bool(cls.MONGO_URI),
             "mongodb_db": cls.MONGO_DB_NAME,
             "supabase_configured": bool(cls.SUPABASE_URL and (cls.SUPABASE_SERVICE_ROLE_KEY or cls.SUPABASE_ANON_KEY)),
-            "groq_configured": bool(cls.GROQ_API_KEY),
+            "groq_configured": len(cls.get_groq_api_keys()) > 0,
+            "groq_keys_count": len(cls.get_groq_api_keys()),
             "groq_model": cls.GROQ_MODEL,
             "groq_fallback_model": cls.GROQ_FALLBACK_MODEL,
             "pinecone_configured": bool(cls.PINECONE_API_KEY),

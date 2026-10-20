@@ -10,32 +10,37 @@ logger = logging.getLogger(__name__)
 
 class GroqClient:
     """
-    Official Groq API client supporting GPT-OSS model family (e.g., openai/gpt-oss-120b, openai/gpt-oss-20b).
-    Enforces strict model verification, timeouts, and structured error handling.
+    Enterprise Groq API client supporting GPT-OSS model family (e.g., openai/gpt-oss-120b, openai/gpt-oss-20b)
+    with multi-key failover rotation across primary and fallback API keys.
     """
 
     def __init__(self):
-        self.api_key = Config.GROQ_API_KEY
         self.primary_model = Config.GROQ_MODEL
         self.fallback_model = Config.GROQ_FALLBACK_MODEL
-        self._client = None
+        self._clients: Dict[str, Any] = {}
 
-    def _get_client(self):
-        if self._client is not None:
-            return self._client
-        if not self.api_key:
+    def get_api_keys(self) -> List[str]:
+        """Retrieves all configured Groq keys from configuration."""
+        return Config.get_groq_api_keys()
+
+    def _get_client_for_key(self, api_key: str):
+        if not api_key:
             return None
+        if api_key in self._clients:
+            return self._clients[api_key]
 
         try:
             from groq import Groq
-            self._client = Groq(api_key=self.api_key, timeout=30.0)
-            return self._client
+            client = Groq(api_key=api_key, timeout=30.0)
+            self._clients[api_key] = client
+            return client
         except Exception as e:
-            logger.error(f"Error creating Groq client: {e}")
+            masked = f"...{api_key[-6:]}" if len(api_key) > 6 else "key"
+            logger.error(f"Error creating Groq client for key {masked}: {e}")
             return None
 
     def is_configured(self) -> bool:
-        return bool(self.api_key)
+        return len(self.get_api_keys()) > 0
 
     def chat_completion(
         self,
@@ -45,48 +50,67 @@ class GroqClient:
         response_format: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """
-        Executes chat completion with configured GPT-OSS model, falling back to verified fallback if needed.
+        Executes chat completion with failover rotation across configured Groq API keys and models.
         """
-        client = self._get_client()
-        if not client:
-            raise ValueError("Groq API key is not configured. Please set GROQ_API_KEY in environment.")
+        keys = self.get_api_keys()
+        if not keys:
+            raise ValueError("No Groq API keys configured. Please set GROQ_API_KEY in environment.")
 
         models_to_try = [self.primary_model]
         if self.fallback_model and self.fallback_model != self.primary_model:
             models_to_try.append(self.fallback_model)
 
         last_error = None
+        attempt_details = []
 
-        for model in models_to_try:
-            try:
-                kwargs = {
-                    "model": model,
-                    "messages": messages,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                }
-                if response_format:
-                    kwargs["response_format"] = response_format
+        # Iterate over keys pool (primary + fallback 1 + fallback 2)
+        for key_idx, key in enumerate(keys, 1):
+            masked = f"...{key[-6:]}" if len(key) > 6 else f"Key #{key_idx}"
+            client = self._get_client_for_key(key)
+            if not client:
+                continue
 
-                start_time = time.time()
-                response = client.chat.completions.create(**kwargs)
-                elapsed = time.time() - start_time
+            for model in models_to_try:
+                try:
+                    kwargs = {
+                        "model": model,
+                        "messages": messages,
+                        "temperature": temperature,
+                        "max_tokens": max_tokens,
+                    }
+                    if response_format:
+                        kwargs["response_format"] = response_format
 
-                content = response.choices[0].message.content
-                logger.info(f"Groq completion successful with {model} in {elapsed:.2f}s")
-                return {
-                    "content": content,
-                    "model": model,
-                    "usage": {
-                        "prompt_tokens": getattr(response.usage, "prompt_tokens", 0),
-                        "completion_tokens": getattr(response.usage, "completion_tokens", 0),
-                    },
-                }
-            except Exception as e:
-                logger.warning(f"Groq completion failed with model {model}: {e}")
-                last_error = e
+                    start_time = time.time()
+                    response = client.chat.completions.create(**kwargs)
+                    elapsed = time.time() - start_time
 
-        raise RuntimeError(f"All configured Groq models failed. Last error: {last_error}")
+                    content = response.choices[0].message.content
+                    logger.info(
+                        f"Groq completion successful using Key #{key_idx} ({masked}) with {model} in {elapsed:.2f}s"
+                    )
+                    return {
+                        "content": content,
+                        "model": model,
+                        "key_index": key_idx,
+                        "usage": {
+                            "prompt_tokens": getattr(response.usage, "prompt_tokens", 0),
+                            "completion_tokens": getattr(response.usage, "completion_tokens", 0),
+                        },
+                    }
+                except Exception as e:
+                    err_msg = str(e)
+                    logger.warning(
+                        f"Groq completion failed on Key #{key_idx} ({masked}) with model {model}: {err_msg}"
+                    )
+                    last_error = e
+                    attempt_details.append(f"Key #{key_idx} ({model}): {err_msg[:120]}")
+                    # If rate limited (429) or auth error, jump to next fallback key immediately
+                    if "429" in err_msg or "rate limit" in err_msg.lower() or "auth" in err_msg.lower() or "quota" in err_msg.lower():
+                        logger.warning(f"Rate limit / quota error on Key #{key_idx}. Failing over to next Groq key...")
+                        break
+
+        raise RuntimeError(f"All configured Groq API keys and models failed. Attempts: {'; '.join(attempt_details)}. Last error: {last_error}")
 
     def chat_json(self, messages: List[Dict[str, str]], temperature: float = 0.1) -> Dict[str, Any]:
         """
