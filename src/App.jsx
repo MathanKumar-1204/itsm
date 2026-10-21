@@ -211,7 +211,7 @@ export default function App() {
   const loadTickets = useCallback(async () => {
     setTicketsLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/tickets', {
+      const res = await fetch('https://itsm-lqs3.vercel.app/api/tickets', {
         headers: getAuthHeaders(),
       });
       const data = await res.json();
@@ -230,8 +230,8 @@ export default function App() {
   const loadKnowledge = useCallback(async () => {
     try {
       const [docsRes, artsRes] = await Promise.all([
-        fetch('http://localhost:5000/api/knowledge/documents', { headers: getAuthHeaders() }),
-        fetch('http://localhost:5000/api/knowledge/articles', { headers: getAuthHeaders() }),
+        fetch('https://itsm-lqs3.vercel.app/api/knowledge/documents', { headers: getAuthHeaders() }),
+        fetch('https://itsm-lqs3.vercel.app/api/knowledge/articles', { headers: getAuthHeaders() }),
       ]);
       const docsData = await docsRes.json();
       const artsData = await artsRes.json();
@@ -249,8 +249,8 @@ export default function App() {
   const loadSoftware = useCallback(async () => {
     try {
       const [catRes, reqRes] = await Promise.all([
-        fetch('http://localhost:5000/api/software/catalog', { headers: getAuthHeaders() }),
-        fetch('http://localhost:5000/api/software/requests', { headers: getAuthHeaders() }),
+        fetch('https://itsm-lqs3.vercel.app/api/software/catalog', { headers: getAuthHeaders() }),
+        fetch('https://itsm-lqs3.vercel.app/api/software/requests', { headers: getAuthHeaders() }),
       ]);
       const catData = await catRes.json();
       const reqData = await reqRes.json();
@@ -268,7 +268,7 @@ export default function App() {
   const loadAuditLogs = useCallback(async () => {
     if (role !== 'admin') return;
     try {
-      const res = await fetch('http://localhost:5000/api/audit-logs', {
+      const res = await fetch('https://itsm-lqs3.vercel.app/api/audit-logs', {
         headers: getAuthHeaders(),
       });
       const data = await res.json();
@@ -287,7 +287,7 @@ export default function App() {
 
   // Initial Boot & Health Check
   useEffect(() => {
-    fetch('http://localhost:5000/api/health')
+    fetch('https://itsm-lqs3.vercel.app/api/health')
       .then(res => res.json())
       .then(data => {
         if (data.status === 'healthy') {
@@ -320,7 +320,7 @@ export default function App() {
     const timer = setTimeout(async () => {
       setRequestEvaluating(true);
       try {
-        const res = await fetch('http://localhost:5000/api/software/evaluate', {
+        const res = await fetch('https://itsm-lqs3.vercel.app/api/software/evaluate', {
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify({
@@ -353,7 +353,7 @@ export default function App() {
     setAuthLoading(true);
 
     try {
-      const res = await fetch('http://localhost:5000/api/auth/login', {
+      const res = await fetch('https://itsm-lqs3.vercel.app/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: authEmail, password: authPassword }),
@@ -391,7 +391,7 @@ export default function App() {
     setAuthLoading(true);
 
     try {
-      const res = await fetch('http://localhost:5000/api/auth/register', {
+      const res = await fetch('https://itsm-lqs3.vercel.app/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -453,7 +453,7 @@ export default function App() {
     setIntakeLoading(true);
 
     try {
-      const res = await fetch('http://localhost:5000/api/tickets/classify', {
+      const res = await fetch('https://itsm-lqs3.vercel.app/api/tickets/classify', {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ user_query: intakeQuery })
@@ -517,7 +517,7 @@ export default function App() {
         ticket_type: intakePreview.ticket_type || 'incident',
       };
 
-      const res = await fetch('http://localhost:5000/api/tickets', {
+      const res = await fetch('https://itsm-lqs3.vercel.app/api/tickets', {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(payload),
@@ -553,7 +553,7 @@ export default function App() {
     setChatLoading(true);
 
     try {
-      const res = await fetch('http://localhost:5000/api/chat/message', {
+      const res = await fetch('https://itsm-lqs3.vercel.app/api/chat/message', {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -611,7 +611,7 @@ export default function App() {
   const handleAddComment = async () => {
     if (!selectedTicket || !newCommentText.trim()) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/tickets/${selectedTicket.id}/comments`, {
+      const res = await fetch(`https://itsm-lqs3.vercel.app/api/tickets/${selectedTicket.id}/comments`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -637,7 +637,7 @@ export default function App() {
   const handleResolveTicket = async () => {
     if (!selectedTicket) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/tickets/${selectedTicket.id}/resolve`, {
+      const res = await fetch(`https://itsm-lqs3.vercel.app/api/tickets/${selectedTicket.id}/resolve`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -659,7 +659,7 @@ export default function App() {
     e.preventDefault();
     if (!requestModalSw) return;
     try {
-      const res = await fetch('http://localhost:5000/api/software/requests', {
+      const res = await fetch('https://itsm-lqs3.vercel.app/api/software/requests', {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -682,7 +682,7 @@ export default function App() {
 
   const handleApproveSoftware = async (reqId) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/software/requests/${reqId}/approve`, {
+      const res = await fetch(`https://itsm-lqs3.vercel.app/api/software/requests/${reqId}/approve`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ approved: true, comment: 'Approved by IT Administrator' })
@@ -698,7 +698,7 @@ export default function App() {
 
   const handleRejectSoftware = async (reqId) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/software/requests/${reqId}/approve`, {
+      const res = await fetch(`https://itsm-lqs3.vercel.app/api/software/requests/${reqId}/approve`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ approved: false, comment: 'Rejected per IT compliance policy' })
@@ -727,7 +727,7 @@ export default function App() {
         formData.append('title', docTitle);
         formData.append('category', uploadCategory);
 
-        const res = await fetch('http://localhost:5000/api/knowledge/documents', {
+        const res = await fetch('https://itsm-lqs3.vercel.app/api/knowledge/documents', {
           method: 'POST',
           headers: getAuthHeaders(true),
           body: formData,
@@ -1350,7 +1350,7 @@ export default function App() {
                             <button
                               onClick={async () => {
                                 try {
-                                  const res = await fetch('http://localhost:5000/api/tickets', {
+                                  const res = await fetch('https://itsm-lqs3.vercel.app/api/tickets', {
                                     method: 'POST',
                                     headers: getAuthHeaders(),
                                     body: JSON.stringify({

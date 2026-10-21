@@ -111,7 +111,7 @@ Priority is calculated by the backend engine rather than unconstrained LLM gener
    ```bash
    python app.py
    ```
-   *The backend starts at `http://localhost:5000`.*
+   *The backend starts at `https://itsm-lqs3.vercel.app`.*
 
 ### Frontend Setup
 1. In the root workspace:

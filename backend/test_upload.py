@@ -17,7 +17,7 @@ body = (
 ).encode('utf-8') + file_content + f'\r\n--{boundary}--\r\n'.encode('utf-8')
 
 req = urllib.request.Request(
-    'http://localhost:5000/api/knowledge/documents',
+    'https://itsm-lqs3.vercel.app/api/knowledge/documents',
     data=body,
     headers={
         'Content-Type': f'multipart/form-data; boundary={boundary}',
